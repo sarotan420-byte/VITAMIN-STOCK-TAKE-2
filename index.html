@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Stocktake — Cyprus Vitamin Shop</title>
+<style>
+  :root {
+    --bg: #ffffff; --bg2: #f5f5f4; --bg3: #eeede8;
+    --text: #1a1a18; --text2: #6b6b67; --text3: #9b9b96;
+    --border: rgba(0,0,0,0.12); --border2: rgba(0,0,0,0.22);
+    --green: #0f6e56; --green-bg: #eaf3de;
+    --amber: #854f0b; --amber-bg: #faeeda;
+    --red: #a32d2d; --red-bg: #fcebeb;
+    --radius: 10px; --radius-sm: 7px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1c1a; --bg2: #252523; --bg3: #2e2e2b;
+      --text: #f0ede6; --text2: #a8a8a2; --text3: #6e6e68;
+      --border: rgba(255,255,255,0.10); --border2: rgba(255,255,255,0.18);
+      --green: #5dcaa5; --green-bg: #0a2e22;
+      --amber: #ef9f27; --amber-bg: #2c1e06;
+      --red: #f09595; --red-bg: #2c0f0f;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.5; }
+
+  #loading { display: flex; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--bg); z-index: 100; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; }
+  #loading.hidden { display: none; }
+  .spinner { width: 32px; height: 32px; border: 3px solid var(--border2); border-top-color: var(--text2); border-radius: 50%; animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #loading-msg { font-size: 15px; color: var(--text2); }
+  #prog-wrap { width: 220px; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  #prog { height: 100%; background: var(--green); border-radius: 2px; width: 0; transition: width .4s; }
+
+  #error-screen { display: none; max-width: 500px; margin: 4rem auto; padding: 1.5rem; background: var(--red-bg); border: 0.5px solid var(--red); border-radius: var(--radius); color: var(--red); }
+  #error-screen h2 { margin-bottom: .5rem; }
+  #error-screen p { font-size: 14px; line-height: 1.6; word-break: break-word; }
+  #error-screen button { margin-top: 1rem; padding: 8px 16px; border: 0.5px solid var(--red); background: transparent; color: var(--red); border-radius: var(--radius-sm); cursor: pointer; font-size: 13px; }
+
+  #app { display: none; max-width: 700px; margin: 0 auto; padding: 1rem 1rem 3rem; }
+  .app-hdr { padding: .75rem 0 .875rem; border-bottom: 0.5px solid var(--border); margin-bottom: 1.25rem; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .app-hdr h1 { font-size: 19px; font-weight: 600; }
+  .app-hdr span { font-size: 13px; color: var(--text2); }
+  #reload-btn { font-size: 12px; padding: 5px 10px; border: 0.5px solid var(--border2); border-radius: var(--radius-sm); background: transparent; color: var(--text2); cursor: pointer; }
+  #reload-btn:hover { background: var(--bg2); }
+  #reload-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 1.25rem; }
+  .metric { background: var(--bg2); border-radius: var(--radius-sm); padding: .625rem .875rem; }
+  .metric-lbl { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 3px; }
+  .metric-val { font-size: 20px; font-weight: 600; }
+
+  .filters { display: flex; gap: 8px; margin-bottom: 1.25rem; flex-wrap: wrap; align-items: center; }
+  .srch-wrap { flex: 1; min-width: 150px; position: relative; }
+  .srch-wrap::before { content: "🔍"; position: absolute; left: 9px; top: 50%; transform: translateY(-50%); font-size: 12px; pointer-events: none; }
+  .srch-wrap input { width: 100%; padding: 7px 10px 7px 30px; font-size: 13px; border: 0.5px solid var(--border2); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); }
+  .srch-wrap input:focus { outline: 2px solid var(--green); outline-offset: 1px; }
+  select.flt { font-size: 13px; padding: 7px 10px; border: 0.5px solid var(--border2); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); max-width: 140px; }
+  select.flt:focus { outline: 2px solid var(--green); outline-offset: 1px; }
+  .chk-ct { font-size: 13px; color: var(--text2); white-space: nowrap; margin-left: auto; }
+
+  .vendor-sec { margin-bottom: 1.125rem; }
+  .vendor-hdr { display: flex; align-items: center; gap: 8px; padding: .5rem 0; border-bottom: 0.5px solid var(--border); cursor: pointer; user-select: none; margin-bottom: .5rem; }
+  .vendor-hdr:hover .vendor-name { color: var(--green); }
+  .vendor-name { font-size: 14px; font-weight: 600; }
+  .vendor-ct { font-size: 12px; color: var(--text3); background: var(--bg2); border-radius: 10px; padding: 2px 8px; }
+  .v-chev { margin-left: auto; font-size: 14px; color: var(--text3); transition: transform .2s; display: inline-block; }
+  .v-chev.open { transform: rotate(180deg); }
+
+  .prod-row { background: var(--bg); border: 0.5px solid var(--border); border-radius: var(--radius); padding: .875rem 1rem; margin-bottom: 7px; }
+  .prod-title { font-size: 14px; font-weight: 500; margin-bottom: 7px; }
+  .var-row { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 10px; padding: 6px 0; border-top: 0.5px solid var(--border); }
+  .var-row:first-of-type { border-top: none; }
+  .var-name { font-size: 13px; color: var(--text2); }
+  .badge { font-size: 13px; font-weight: 500; padding: 3px 10px; border-radius: 20px; min-width: 50px; text-align: center; }
+  .b-ok   { background: var(--green-bg); color: var(--green); }
+  .b-low  { background: var(--amber-bg); color: var(--amber); }
+  .b-zero { background: var(--red-bg);   color: var(--red); }
+  .btns { display: flex; gap: 6px; flex-shrink: 0; }
+  .btn { font-size: 12px; padding: 5px 10px; border-radius: var(--radius-sm); border: 0.5px solid var(--border2); background: transparent; color: var(--text); cursor: pointer; display: flex; align-items: center; gap: 4px; white-space: nowrap; transition: background .12s; }
+  .btn:hover { background: var(--bg2); }
+  .btn-ok { border-color: var(--green); color: var(--green); }
+  .btn-ok:hover { background: var(--green-bg); }
+  .panel { display: none; margin-top: 8px; padding: 10px 12px; background: var(--bg2); border-radius: var(--radius-sm); flex-direction: column; gap: 8px; }
+  .panel.open { display: flex; }
+  .p-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .p-lbl { font-size: 12px; color: var(--text2); width: 70px; flex-shrink: 0; }
+  .qty-in { width: 80px; font-size: 14px; text-align: center; padding: 5px 8px; border: 0.5px solid var(--border2); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); }
+  .qty-in:focus { outline: 2px solid var(--green); outline-offset: 1px; }
+  .delta { font-size: 13px; font-weight: 500; min-width: 60px; }
+  .p-actions { display: flex; gap: 8px; align-items: center; }
+  .btn-save { font-size: 13px; padding: 6px 16px; border-radius: var(--radius-sm); border: 0.5px solid var(--green); background: transparent; color: var(--green); cursor: pointer; font-weight: 500; }
+  .btn-save:hover { background: var(--green-bg); }
+  .btn-save:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-cancel { font-size: 13px; padding: 6px 10px; border-radius: var(--radius-sm); border: 0.5px solid var(--border); background: transparent; color: var(--text2); cursor: pointer; }
+  .done { opacity: .45; }
+
+  #toast { position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%); padding: 10px 18px; border-radius: var(--radius-sm); font-size: 14px; font-weight: 500; display: none; z-index: 999; box-shadow: 0 4px 12px rgba(0,0,0,.15); white-space: nowrap; }
+  #toast.ok  { background: var(--green-bg); color: var(--green); display: block; }
+  #toast.err { background: var(--red-bg);   color: var(--red);   display: block; }
+
+  @media (max-width: 500px) {
+    .metrics { grid-template-columns: repeat(2, 1fr); }
+    .var-row { grid-template-columns: 1fr; gap: 6px; }
+    .btns { justify-content: flex-end; }
+    select.flt { max-width: 110px; font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <div class="spinner"></div>
+  <p id="loading-msg">Connecting to Shopify…</p>
+  <div id="prog-wrap"><div id="prog"></div></div>
+</div>
+
+<div id="error-screen">
+  <h2>⚠️ Error</h2>
+  <p id="error-msg"></p>
+  <button onclick="location.reload()">Try again</button>
+</div>
+
+<div id="app">
+  <div class="app-hdr">
+    <div>
+      <h1>📦 Stocktake</h1>
+      <span id="subtitle">Cyprus Vitamin Shop</span>
+    </div>
+    <button id="reload-btn" onclick="reloadProducts()">↺ Refresh</button>
+  </div>
+
+  <div class="metrics">
+    <div class="metric"><div class="metric-lbl">Products</div><div class="metric-val" id="m-prod">—</div></div>
+    <div class="metric"><div class="metric-lbl">Variants</div><div class="metric-val" id="m-var">—</div></div>
+    <div class="metric"><div class="metric-lbl">Vendors</div><div class="metric-val" id="m-vend">—</div></div>
+    <div class="metric"><div class="metric-lbl">Checked</div><div class="metric-val" id="m-chk">0</div></div>
+  </div>
+
+  <div class="filters">
+    <div class="srch-wrap"><input type="text" id="srch" placeholder="Search products…"></div>
+    <select class="flt" id="flt-v"><option value="">All vendors</option></select>
+    <select class="flt" id="flt-s">
+      <option value="">All stock</option>
+      <option value="zero">Out of stock</option>
+      <option value="low">Low (1–5)</option>
+      <option value="ok">In stock (6+)</option>
+    </select>
+    <span class="chk-ct" id="chk-ct">—</span>
+  </div>
+
+  <div id="main"></div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+let locationId = null;
+let checkedSet = new Set();
+let totalVars = 0;
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+function showToast(msg, type = "ok") {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.className = type;
+  clearTimeout(t._t);
+  t._t = setTimeout(() => { t.className = ""; }, 3500);
+}
+
+function setProgress(msg, pct) {
+  document.getElementById("loading-msg").textContent = msg;
+  document.getElementById("prog").style.width = pct + "%";
+}
+
+function showError(msg) {
+  document.getElementById("loading").className = "hidden";
+  document.getElementById("error-screen").style.display = "block";
+  document.getElementById("error-msg").textContent = msg;
+}
+
+function badgeClass(q) {
+  return q <= 0 ? "b-zero" : q <= 5 ? "b-low" : "b-ok";
+}
+
+// ── Shopify GraphQL via proxy ─────────────────────────────────────────────────
+async function shopify(query, variables = {}) {
+  const res = await fetch("/api/shopify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query, variables })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  if (data.errors) throw new Error(data.errors[0].message);
+  return data;
+}
+
+// ── fetch location ────────────────────────────────────────────────────────────
+async function fetchLocation() {
+  const data = await shopify(`{ locations(first: 1) { edges { node { id name } } } }`);
+  return data.data.locations.edges[0]?.node.id || null;
+}
+
+// ── fetch all active products ─────────────────────────────────────────────────
+async function fetchAllProducts() {
+  let products = [];
+  let cursor = null;
+  let page = 0;
+
+  while (true) {
+    page++;
+    setProgress(`Loading products… (page ${page})`, Math.min(10 + page * 12, 85));
+
+    const data = await shopify(`
+      query GetProducts($cursor: String) {
+        products(first: 50, query: "status:active", after: $cursor) {
+          pageInfo { hasNextPage endCursor }
+          edges {
+            node {
+              id title vendor
+              variants(first: 100) {
+                edges {
+                  node {
+                    id title inventoryQuantity
+                    inventoryItem { id tracked }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    `, { cursor });
+
+    const page_data = data.data.products;
+    products = products.concat(page_data.edges.map(e => e.node));
+    if (page_data.pageInfo.hasNextPage) {
+      cursor = page_data.pageInfo.endCursor;
+    } else {
+      break;
+    }
+  }
+  return products;
+}
+
+// ── update inventory ──────────────────────────────────────────────────────────
+async function updateInventory(inventoryItemId, locId, delta) {
+  const data = await shopify(`
+    mutation AdjustInventory($input: InventoryAdjustQuantitiesInput!) {
+      inventoryAdjustQuantities(input: $input) {
+        inventoryAdjustmentGroup { id }
+        userErrors { field message }
+      }
+    }
+  `, {
+    input: {
+      reason: "correction",
+      name: "available",
+      changes: [{ delta, inventoryItemId, locationId: locId }]
+    }
+  });
+
+  const errors = data.data?.inventoryAdjustQuantities?.userErrors || [];
+  if (errors.length) throw new Error(errors[0].message);
+  return true;
+}
+
+// ── build UI ──────────────────────────────────────────────────────────────────
+function buildUI(products) {
+  checkedSet = new Set();
+  totalVars = 0;
+
+  const vendors = {};
+  products.forEach(p => {
+    const v = p.vendor || "Unknown";
+    if (!vendors[v]) vendors[v] = [];
+    vendors[v].push(p);
+    totalVars += p.variants.edges.length;
+  });
+  const sortedV = Object.keys(vendors).sort((a, b) => a.localeCompare(b));
+
+  document.getElementById("m-prod").textContent = products.length;
+  document.getElementById("m-var").textContent = totalVars;
+  document.getElementById("m-vend").textContent = sortedV.length;
+  document.getElementById("m-chk").textContent = "0";
+  document.getElementById("chk-ct").textContent = `0 of ${totalVars} checked`;
+  document.getElementById("subtitle").textContent = `${products.length} products · ${sortedV.length} vendors · ${totalVars} variants`;
+
+  const fltV = document.getElementById("flt-v");
+  fltV.innerHTML = `<option value="">All vendors</option>`;
+  sortedV.forEach(v => {
+    const o = document.createElement("option");
+    o.value = v; o.textContent = v; fltV.appendChild(o);
+  });
+
+  const main = document.getElementById("main");
+  main.innerHTML = "";
+
+  sortedV.forEach(vendor => {
+    const prods = vendors[vendor];
+    const sec = document.createElement("div");
+    sec.className = "vendor-sec";
+    sec.dataset.vendor = vendor;
+
+    const hdr = document.createElement("div");
+    hdr.className = "vendor-hdr";
+    hdr.innerHTML = `<span style="font-size:16px">🏭</span><span class="vendor-name">${vendor}</span><span class="vendor-ct">${prods.length} product${prods.length !== 1 ? "s" : ""}</span><span class="v-chev open">▾</span>`;
+
+    const body = document.createElement("div");
+    hdr.addEventListener("click", () => {
+      const ch = hdr.querySelector(".v-chev");
+      const open = ch.classList.contains("open");
+      ch.classList.toggle("open", !open);
+      body.style.display = open ? "none" : "";
+    });
+
+    prods.forEach(prod => {
+      const row = document.createElement("div");
+      row.className = "prod-row";
+      row.dataset.title = (prod.title || "").toLowerCase();
+      const stocks = prod.variants.edges.map(e => e.node.inventoryQuantity ?? -1).join(",");
+      row.dataset.stocks = stocks;
+
+      const singleDefault = prod.variants.edges.length === 1 && prod.variants.edges[0].node.title === "Default Title";
+      let html = `<div class="prod-title">${prod.title}</div>`;
+
+      prod.variants.edges.forEach(({ node: v }) => {
+        const qty = v.inventoryQuantity ?? 0;
+        const uid = `v${v.inventoryItem.id.split("/").pop()}`;
+        html += `
+          <div class="var-row" id="vr_${uid}">
+            <span class="var-name">${singleDefault ? "" : v.title}</span>
+            <span class="badge ${badgeClass(qty)}" id="bdg_${uid}">${qty}</span>
+            <div class="btns">
+              <button class="btn btn-ok" onclick="markOk('${uid}')">✓ Correct</button>
+              <button class="btn" onclick="togglePanel('${uid}')">✎ Adjust</button>
+            </div>
+          </div>
+          <div class="panel" id="pnl_${uid}" data-cur="${qty}" data-invid="${v.inventoryItem.id}">
+            <div class="p-row">
+              <span class="p-lbl">New total</span>
+              <input class="qty-in" id="qin_${uid}" type="number" min="0" value="${qty}" oninput="updateDelta('${uid}')">
+              <span class="delta" id="dlt_${uid}"></span>
+            </div>
+            <div class="p-actions">
+              <button class="btn-save" onclick="doSave('${uid}')">Save</button>
+              <button class="btn-cancel" onclick="togglePanel('${uid}')">Cancel</button>
+            </div>
+          </div>`;
+      });
+
+      row.innerHTML = html;
+      body.appendChild(row);
+    });
+
+    sec.appendChild(hdr);
+    sec.appendChild(body);
+    main.appendChild(sec);
+  });
+}
+
+// ── actions ───────────────────────────────────────────────────────────────────
+function togglePanel(uid) {
+  document.getElementById("pnl_" + uid).classList.toggle("open");
+}
+
+function updateDelta(uid) {
+  const pnl = document.getElementById("pnl_" + uid);
+  const cur = parseInt(pnl.dataset.cur || 0);
+  const nv = parseInt(document.getElementById("qin_" + uid).value) || 0;
+  const d = nv - cur;
+  const el = document.getElementById("dlt_" + uid);
+  el.textContent = d === 0 ? "no change" : (d > 0 ? "+" + d : "" + d);
+  el.style.color = d > 0 ? "var(--green)" : d < 0 ? "var(--red)" : "var(--text3)";
+}
+
+function markOk(uid) {
+  document.getElementById("vr_" + uid).closest(".prod-row").classList.add("done");
+  checkedSet.add(uid);
+  updateCheckCount();
+  showToast("Marked as correct ✓");
+}
+
+function updateCheckCount() {
+  document.getElementById("m-chk").textContent = checkedSet.size;
+  document.getElementById("chk-ct").textContent = `${checkedSet.size} of ${totalVars} checked`;
+}
+
+async function doSave(uid) {
+  const pnl = document.getElementById("pnl_" + uid);
+  const nv = parseInt(document.getElementById("qin_" + uid).value);
+  if (isNaN(nv) || nv < 0) { showToast("Enter a valid quantity", "err"); return; }
+  const cur = parseInt(pnl.dataset.cur || 0);
+  const delta = nv - cur;
+  const invId = pnl.dataset.invid;
+
+  const saveBtn = pnl.querySelector(".btn-save");
+  saveBtn.textContent = "Saving…";
+  saveBtn.disabled = true;
+
+  try {
+    await updateInventory(invId, locationId, delta);
+    const bdg = document.getElementById("bdg_" + uid);
+    if (bdg) { bdg.textContent = nv; bdg.className = "badge " + badgeClass(nv); }
+    pnl.dataset.cur = nv;
+    pnl.classList.remove("open");
+    checkedSet.add(uid);
+    updateCheckCount();
+    showToast(delta === 0 ? "No change saved" : `Updated: ${delta > 0 ? "+" : ""}${delta} units ✓`);
+  } catch (e) {
+    showToast("Update failed: " + (e.message || "error"), "err");
+  } finally {
+    saveBtn.textContent = "Save";
+    saveBtn.disabled = false;
+  }
+}
+
+// ── filters ───────────────────────────────────────────────────────────────────
+function applyFilters() {
+  const q = document.getElementById("srch").value.toLowerCase();
+  const fv = document.getElementById("flt-v").value;
+  const fs = document.getElementById("flt-s").value;
+  document.querySelectorAll(".vendor-sec").forEach(sec => {
+    const vendor = sec.dataset.vendor;
+    let anyVisible = false;
+    sec.querySelectorAll(".prod-row").forEach(row => {
+      const matchQ = !q || (row.dataset.title || "").includes(q);
+      const matchV = !fv || vendor === fv;
+      let matchS = true;
+      if (fs) {
+        const stocks = (row.dataset.stocks || "").split(",").map(Number);
+        if (fs === "zero") matchS = stocks.some(s => s <= 0);
+        else if (fs === "low") matchS = stocks.some(s => s >= 1 && s <= 5);
+        else if (fs === "ok") matchS = stocks.some(s => s >= 6);
+      }
+      const show = matchQ && matchV && matchS;
+      row.style.display = show ? "" : "none";
+      if (show) anyVisible = true;
+    });
+    sec.style.display = ((!fv || vendor === fv) && anyVisible) ? "" : "none";
+  });
+}
+
+document.getElementById("srch").addEventListener("input", () => setTimeout(applyFilters, 150));
+document.getElementById("flt-v").addEventListener("change", applyFilters);
+document.getElementById("flt-s").addEventListener("change", applyFilters);
+
+// ── reload ────────────────────────────────────────────────────────────────────
+async function reloadProducts() {
+  const btn = document.getElementById("reload-btn");
+  btn.disabled = true; btn.textContent = "Loading…";
+  document.getElementById("loading").className = "";
+  try {
+    const products = await fetchAllProducts();
+    buildUI(products);
+    document.getElementById("loading").className = "hidden";
+    showToast("Products refreshed ✓");
+  } catch (e) {
+    showToast("Refresh failed: " + (e.message || "error"), "err");
+    document.getElementById("loading").className = "hidden";
+  } finally {
+    btn.disabled = false; btn.textContent = "↺ Refresh";
+  }
+}
+
+// ── init ──────────────────────────────────────────────────────────────────────
+(async () => {
+  try {
+    setProgress("Connecting to Shopify…", 5);
+    locationId = await fetchLocation();
+    if (!locationId) throw new Error("No location found. Check SHOPIFY_ACCESS_TOKEN and SHOPIFY_SHOP_DOMAIN in Vercel.");
+
+    setProgress("Fetching products…", 15);
+    const products = await fetchAllProducts();
+
+    setProgress("Building dashboard…", 95);
+    buildUI(products);
+
+    document.getElementById("loading").className = "hidden";
+    document.getElementById("app").style.display = "block";
+  } catch (e) {
+    showError(e.message || "Failed to load. Check your Vercel environment variables.");
+  }
+})();
+</script>
+</body>
+</html>
